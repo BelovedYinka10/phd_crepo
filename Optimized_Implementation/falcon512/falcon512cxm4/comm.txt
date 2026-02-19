@@ -5,3 +5,6 @@ aarch64-linux-gnu-gcc -O3 -mcpu=native \
     falcon512_run.c \
     codec.c common.c fft.c fpr.c keygen.c \
     -o falcon_bench -lm
+
+
+use this 
