@@ -2,27 +2,35 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <x86intrin.h>   // For __rdtsc() CPU cycle counter
+#include <time.h>
 
 #include "api.h"   // NIST Falcon-512 API
 
 #define NTESTS 100  // Number of iterations for stable benchmarking
 
+/* High-resolution timer (nanoseconds) */
+static inline uint64_t get_time_ns() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ((uint64_t)ts.tv_sec * 1000000000ULL) + ts.tv_nsec;
+}
+
 int main(void) {
-    /* ---- Key buffers (fixed-size from api.h) ---- */
+
+    /* ---- Key buffers (from NIST API) ---- */
     unsigned char pk[CRYPTO_PUBLICKEYBYTES];
     unsigned char sk[CRYPTO_SECRETKEYBYTES];
 
     /* ---- Message ---- */
-    const char *msg = "Hello Falcon-512";
+    const char *msg = "Hello Falcon-512 on Raspberry Pi";
     unsigned long long mlen = (unsigned long long)strlen(msg);
 
-    /* ---- Signature buffers (NIST format: sig || message) ---- */
+    /* ---- Signature buffers (sig || message) ---- */
     unsigned char *sm = (unsigned char *)malloc(CRYPTO_BYTES + mlen);
     unsigned char *m2 = (unsigned char *)malloc(CRYPTO_BYTES + mlen);
 
     if (!sm || !m2) {
-        fprintf(stderr, "Allocation failed\n");
+        fprintf(stderr, "Memory allocation failed\n");
         free(sm);
         free(m2);
         return 1;
@@ -31,32 +39,32 @@ int main(void) {
     unsigned long long smlen = 0;
     unsigned long long m2len = 0;
 
-    /* ---- Cycle counters ---- */
-    unsigned long long start, end;
-    unsigned long long keygen_cycles = 0;
-    unsigned long long sign_cycles = 0;
-    unsigned long long verify_cycles = 0;
+    /* ---- Timing accumulators ---- */
+    uint64_t start, end;
+    uint64_t keygen_time = 0;
+    uint64_t sign_time = 0;
+    uint64_t verify_time = 0;
 
     printf("========================================\n");
-    printf(" Falcon-512 CPU Cycle Benchmark (Reference)\n");
+    printf(" Falcon-512 Benchmark (Raspberry Pi ARM)\n");
     printf(" Iterations: %d\n", NTESTS);
     printf("========================================\n\n");
 
     for (int i = 0; i < NTESTS; i++) {
 
-        /* ---- Key Generation (Cycle Measured) ---- */
-        start = __rdtsc();
+        /* ---- Key Generation ---- */
+        start = get_time_ns();
         if (crypto_sign_keypair(pk, sk) != 0) {
             fprintf(stderr, "Keypair generation failed\n");
             free(sm);
             free(m2);
             return 1;
         }
-        end = __rdtsc();
-        keygen_cycles += (end - start);
+        end = get_time_ns();
+        keygen_time += (end - start);
 
-        /* ---- Sign (Cycle Measured) ---- */
-        start = __rdtsc();
+        /* ---- Signing ---- */
+        start = get_time_ns();
         if (crypto_sign(sm, &smlen,
                         (const unsigned char *)msg, mlen,
                         sk) != 0) {
@@ -65,11 +73,11 @@ int main(void) {
             free(m2);
             return 1;
         }
-        end = __rdtsc();
-        sign_cycles += (end - start);
+        end = get_time_ns();
+        sign_time += (end - start);
 
-        /* ---- Verify (Cycle Measured) ---- */
-        start = __rdtsc();
+        /* ---- Verification ---- */
+        start = get_time_ns();
         if (crypto_sign_open(m2, &m2len,
                              sm, smlen,
                              pk) != 0) {
@@ -78,10 +86,10 @@ int main(void) {
             free(m2);
             return 2;
         }
-        end = __rdtsc();
-        verify_cycles += (end - start);
+        end = get_time_ns();
+        verify_time += (end - start);
 
-        /* ---- Sanity check (message integrity) ---- */
+        /* ---- Integrity Check ---- */
         if (m2len != mlen || memcmp(m2, msg, mlen) != 0) {
             fprintf(stderr, "Message mismatch after verification\n");
             free(sm);
@@ -90,15 +98,15 @@ int main(void) {
         }
     }
 
-    /* ---- Compute Averages ---- */
-    unsigned long long avg_keygen = keygen_cycles / NTESTS;
-    unsigned long long avg_sign   = sign_cycles / NTESTS;
-    unsigned long long avg_verify = verify_cycles / NTESTS;
+    /* ---- Compute averages (nanoseconds) ---- */
+    uint64_t avg_keygen = keygen_time / NTESTS;
+    uint64_t avg_sign   = sign_time / NTESTS;
+    uint64_t avg_verify = verify_time / NTESTS;
 
-    printf("========== AVERAGE CPU CYCLES ==========\n");
-    printf("KeyGen  : %llu cycles\n", avg_keygen);
-    printf("Sign    : %llu cycles\n", avg_sign);
-    printf("Verify  : %llu cycles\n", avg_verify);
+    printf("========== AVERAGE TIME (nanoseconds) ==========\n");
+    printf("KeyGen  : %lu ns\n", avg_keygen);
+    printf("Sign    : %lu ns\n", avg_sign);
+    printf("Verify  : %lu ns\n", avg_verify);
 
     printf("\n========== ADDITIONAL METRICS ==========\n");
     printf("Signature size (sig + msg): %llu bytes\n", smlen);

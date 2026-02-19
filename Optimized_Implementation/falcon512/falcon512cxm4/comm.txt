@@ -1,0 +1,10 @@
+sudo apt update
+sudo apt install build-essential git
+gcc -O3 -march=armv8-a -mtune=cortex-a72 \
+    falcon_bench_pi.c \
+    sign.c vrfy.c keygen.c rng.c codec.c common.c fft.c fpr.c \
+    -o falcon_bench
+
+
+make
+gcc -O3 falcon_bench_pi.c libfalcon.a -o falcon_bench -lm
