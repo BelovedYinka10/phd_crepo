@@ -1,0 +1,21 @@
+# macOS AppleDouble sidecar files (from copying between Mac <-> Windows/exFAT)
+._*
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Verilator build output
+obj_dir/
+
+# Vivado simulation / synthesis artifacts
+*.jou
+*.log
+*.wdb
+*.pb
+xsim.dir/
+.Xil/
+*.str
+webtalk*.log
+webtalk*.xml
